@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH --export=ALL
+#SBATCH --job-name=snakemake
+#SBATCH --nodes=1
+#SBATCH --output=snakemake-%j.out
+#SBATCH --time=72:00:00
+#SBATCH --mem=64G
+
+module load Anaconda3
+source activate snakemake_slurm
+
+snakemake --profile slurm --use-apptainer --use-conda --apptainer-args='--nv' $@
