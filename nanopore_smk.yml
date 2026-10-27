@@ -1,0 +1,10 @@
+name: nanopore_smk
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - snakemake
+  - snakemake-executor-plugin-slurm
+  - samtools
+  - minimap2

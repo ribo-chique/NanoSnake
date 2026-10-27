@@ -1,0 +1,11 @@
+configfile: "workflow/config/config.yml"
+
+include: "rule/common.smk"
+include: "rule/basecall.smk"
+include: "rule/align.smk"
+include: "rule/qc.smk"
+
+print(get_final_output())
+rule all:
+    input:
+        get_final_output()

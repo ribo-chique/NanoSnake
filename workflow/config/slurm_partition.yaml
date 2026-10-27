@@ -1,0 +1,31 @@
+partitions:
+  gpu:
+    max_gpu: 96
+    max_nodes: 1
+    max_runtime: 4-00:00:00
+    max_threads: 56
+  hp-a100:
+    max_gpu: 56
+    max_nodes: 1
+    max_runtime: 4-00:00:00
+    max_threads: 48
+  hp-cpu:
+    max_runtime: 4-00:00:00
+    max_threads: 64
+  hp-h100:
+    max_gpu: 10
+    max_nodes: 1
+    max_runtime: 4-00:00:00
+    max_threads: 48
+  hp-h100-nvl:
+    max_gpu: 16
+    max_nodes: 1
+    max_runtime: 4-00:00:00
+    max_threads: 96
+  interactive:
+    max_nodes: 1
+    max_runtime: 08:00:00
+    max_threads: 64
+  sheffield:
+    max_runtime: 4-00:00:00
+    max_threads: 64

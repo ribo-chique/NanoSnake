@@ -1,0 +1,25 @@
+apptainer_path: "~/nanopore-essentials.sif"
+
+input_dir: "00_pod5"
+# adjust file format in common.smk
+
+dorado:
+  basecalling_model: "sup,inosine_m6A_2OmeA,pseU_2OmeU"
+  min_q: "8"
+
+reference: "U8_ref_transcriptome/U8/U8_ref.fa"
+
+bwa:
+  # bwa index params
+  idx-param: "-a is"
+  # bwa mem params, -C is essential to copy samtools tags from fastq to output bam
+  mem-param: "-C -W 13 -k 6 -T 20 -x ont2d"
+
+QC:
+  # QC can be split per gene, select which gene.
+  chrom:
+    - U8
+    - U8-3
+    - 5-8S
+    - U6
+
