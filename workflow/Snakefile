@@ -1,9 +1,11 @@
 configfile: "workflow/config/config.yml"
+container: config["apptainer_path"]
 
 include: "rule/common.smk"
 include: "rule/basecall.smk"
 include: "rule/align.smk"
 include: "rule/qc.smk"
+include: "rule/sample_probs.smk"
 
 print(get_final_output())
 rule all:

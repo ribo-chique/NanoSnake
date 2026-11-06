@@ -3,8 +3,6 @@ rule split_bam:
         aln_sorted_bam = "results/02_align/{sample_name}/{sample_name}.aln.sorted.bam"
     output:
         temp(multiext("results/02_align/{sample_name}/{sample_name}_{chrom}", aln_sorted_bam=".aln.sorted.bam", aln_fastq=".aln.fastq.gz", bam_idx=".aln.sorted.bam.bai"))
-    params:
-        chrom=config["QC"]["chrom"]
     resources:
         #24h
         runtime=1440,
@@ -39,6 +37,7 @@ def QC_input_files(wildcards):
     else:
         return {
             "aln_sorted_bam": f"{file_name}_{wildcards.chrom}.aln.sorted.bam",
+            "chrom_bam_idx": f"{file_name}_{wildcards.chrom}.aln.sorted.bam.bai",
             "aln_fastq": f"{file_name}_{wildcards.chrom}.aln.fastq.gz"
             }
 
@@ -64,7 +63,6 @@ rule multiQC:
         # label sample_chrom_bam_idx as input just in case these are needed, also only label the chrom that are not "all"
         nanocount_tsv = expand("results/03_QC/{sample_name}/{sample_name}_all.nanocount.tsv", sample_name = BIO_SAMPLE),
         aln_sorted_bam = expand("results/02_align/{sample_name}/{sample_name}.aln.sorted.bam", sample_name = SAMPLE),
-        chrom_bam_idx = expand("results/02_align/{sample_name}/{sample_name}_{chrom}.aln.sorted.bam.bai", sample_name = SAMPLE, chrom = config["QC"]["chrom"]),
 
         nanoq = expand("results/03_QC/{sample_name}/{sample_name}_{chrom}.nanoq", sample_name = SAMPLE, chrom = CHROM),
         nanostat = expand("results/03_QC/{sample_name}/{sample_name}_{chrom}.nanostat", sample_name = SAMPLE, chrom = CHROM),

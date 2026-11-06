@@ -17,13 +17,24 @@ BIO_SAMPLE = [
     if not ivt_pattern.search(name)
 ]
 
-print("samples:", SAMPLE)
-print("input directory:", config["input_dir"])
+SAMPLE_plus_merge = list(SAMPLE)
+if len(IVT_SAMPLE) > 1:
+    SAMPLE_plus_merge.append("IVT_merge")
+    OPTIMISE_SAMPLE = ["IVT_merge"]
+else:
+    OPTIMISE_SAMPLE = IVT_SAMPLE
 
 CHROM = ["all"] + config["QC"]["chrom"]
 
-STEPS = ["01_basecall","02_align","03_QC"]
-EXTENSION = ["basecall.bam", "aln.sorted.bam"]
+if config["QC"]["chrom"] == []:
+    QC_CHROM = "all"
+else:
+    QC_CHROM = config["QC"]["chrom"]
+
+if config["optimise_sensitivity"]["chrom"] == []:
+    OPTIMISE_CHROM = QC_CHROM
+else:
+    OPTIMISE_CHROM = config["optimise_sensitivity"]["chrom"]
 
 def get_final_output():
     
@@ -42,4 +53,45 @@ def get_final_output():
         "results/03_QC/multiqc.html"
     )
 
+    final_output.append(
+        f"results/fa2bed/{ref_name}.bed"
+    )
+
+    if QC_CHROM == "all":
+        final_output.extend(
+            expand(
+                "results/04_sample_probs/{sample}/{sample}_probabilities.tsv",
+                sample = SAMPLE_plus_merge
+                )
+        )
+    else:
+        final_output.extend(
+            expand(
+            "results/04_sample_probs/{sample}/{chrom}/{sample}_{chrom}_probabilities.tsv",
+            sample = SAMPLE_plus_merge,
+            chrom = QC_CHROM
+            )
+        )
+    
+    if OPTIMISE_CHROM == "all":
+        final_output.extend(
+            expand(
+                "results/04_sample_probs/{sample}/optimise_accuracy.tsv",
+                sample = OPTIMISE_SAMPLE
+                )
+        )
+    else:
+        final_output.extend(
+            expand(
+            "results/04_sample_probs/{sample}/{chrom}/optimise_accuracy.tsv",
+            sample = OPTIMISE_SAMPLE,
+            chrom = OPTIMISE_CHROM
+            )
+        )
     return final_output
+
+print("samples:", SAMPLE)
+print("input directory:", config["input_dir"])
+print("reference file:", config["reference"])
+print("chroms to QC:", QC_CHROM)
+print("IVT samples:", IVT_SAMPLE)

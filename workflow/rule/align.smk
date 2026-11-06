@@ -2,7 +2,7 @@ rule bwa_index:
     input:
         ref=config["reference"]
     output:
-        multiext(config["reference"], ".amb", ".ann", ".bwt", ".pac", ".sa")
+        multiext(config["reference"], ".amb", ".ann", ".bwt", ".pac", ".sa", ".fai")
     params:
         idx=config["bwa"]["idx-param"]
     conda:

@@ -15,11 +15,40 @@ bwa:
   # bwa mem params, -C is essential to copy samtools tags from fastq to output bam
   mem-param: "-C -W 13 -k 6 -T 20 -x ont2d"
 
+# QC can be split per gene, select which gene.
+# Leave blank for overall QC without splitting, or input <gene_name>
+
+# RECOMMENDED: QC all genes in the reference transcriptome
 QC:
-  # QC can be split per gene, select which gene.
   chrom:
     - U8
     - U8-3
     - 5-8S
     - U6
+
+
+# params specify --hist and sampling options only
+sample_probs:
+  params: "--hist"
+
+# modification sampling are carried out per gene same as the the QC above
+# this step is carried out on 1 IVT sample. IVT samples are automatically detected by sample name "IVT" (case insensitive).
+# if there are multiple IVTs then a merged IVT sample is automatically created.
+# RECOMMENDED: have IVT samples for at least 1 gene in the reference transcriptome
+optimise_sensitivity:
+  # leave blank = same as QC, so if QC[chrom] and optimise_sensitivity[chrom] are both blank, thresholds are done for overall dataset rather than gene specific
+  chrom:
+    - U8
+  # enter target specificity for IVT controls in %, 99.5 means IVT negative controls have maximum 1 in 200 bases that are falsely called as modified
+  desired_sensitivity: 99.5
+
+# the above step generates a tsv containing the optimal mod thresholds for each canonical nucleotide for each gene
+# now we apply these thresholds to the --filter-threshold parameter
+pileup:
+  # if there are no IVT samples, input custom --filter-threshold here, "default" for default (not recommended), or leave blank to disable. 
+  # any inputs here would override pileup[use_chrom_specific_threshold]
+  override_threshold: 
+  # if False, make sure optimise_sensitivity[chrom] only has 1 chrom entry
+  # if True, optimise_sensitivity[chrom] must have the same as QC[chrom], ie QC[chrom] individual genes, optimise_sensitivity[chrom] leave blank
+  use_chrom_specific_threshold: False
 
