@@ -23,31 +23,23 @@ parser <- OptionParser()
 parser <- add_option(parser, 
                      opt_str = c("-i", "--input"), 
                      type = "character",
-                     dest = 'input_dir',
-                     help="Input directory (required). A full path to a directory containing subdirectories with a modkit sample-probs tsv. The parent directory is searched recursively."
+                     dest = 'input_path',
+                     help="Full path to modkit extract calls tsv (required)."
 )
 
 parser <- add_option(parser, 
                      opt_str = c("-o", "--output"), 
                      type = "character",
-                     dest = 'output_dir',
+                     dest = 'output_path',
                      default=NA,
-                     help="Output directory (optional, default is the same as the input directory). The output directory will contain sub-directories that contain variables associated with each input tsv file."
+                     help="Output path name (optional, default is the optimise_sensitivity.tsv in the same directory)"
 )
 
 parser <- add_option(parser, 
                      opt_str = c("-a", "--accuracy"), 
                      type = "double",
                      dest = 'target_accuracy',
-                     help="Desired accuracy score in percentages, which the output filter threshold will satisfy (required). eg 99 for 99% accuracy."
-)
-
-parser <- add_option(parser, 
-                     opt_str = c("-p", "--processors"), 
-                     type="integer", 
-                     default=1,
-                     dest = 'cores',
-                     help="Number of processors to use for the anlaysis (default 1). Only helps when you are analysing more than one file at a time"
+                     help="Desired sensitivity score in percentages, which the output filter threshold will satisfy (required). eg 99 for 99% sensitivity."
 )
 
 opt = parse_args(parser)
@@ -97,9 +89,10 @@ find_optimum_threshold <- function(nt, calls_tsv, threshold_tsv, target_accuracy
   
   # default threshold is the prob score of the 10th percentile
   default_threshold = threshold_tsv %>% 
-    filter(base == nt & percentile == 10) %>% 
-    pull(threshold) %>% 
-    round(digits = 7) %>% as.numeric()
+    filter(canonical_base == nt) %>% 
+    pull(default_threshold) %>% 
+    as.numeric() |> 
+    round(digits = 7)
   
   default_accuracy = find_accuracy(calls_tsv, nt, default_threshold)
   
@@ -164,9 +157,10 @@ find_optimum_threshold <- function(nt, calls_tsv, threshold_tsv, target_accuracy
   }
   
   output_df <- data.frame(base = nt,
-                          raw_accuracy = raw_accuracy, 
-                          default_threshold = default_threshold, 
-                          final_threshold = final_threshold, 
+                          unfiltered_accuracy = raw_accuracy,
+                          default_threshold = default_threshold,
+                          default_accuracy = default_accuracy,
+                          final_threshold = final_threshold,
                           final_accuracy = final_accuracy)
 
    # # if final_threshold is the max at 0.9999999, we change it back to 1
@@ -178,125 +172,76 @@ find_optimum_threshold <- function(nt, calls_tsv, threshold_tsv, target_accuracy
 }
 
 # run pipeline for ATCG, then output a single dataframe
-run_for_single_chrom <- function(sample_chrom_dir){
+run_for_single_chrom <- function(chrom, calls_tsv){
+  
   
   # for a given directory, find probs and threshold tsv
-  calls_tsv = list.files(sample_chrom_dir, pattern = "extract_calls.tsv.gz", full.names = TRUE) %>% 
-    read_table(show_col_types = FALSE,
-      col_types = list(
-      forward_read_position = "i",
-      ref_position = "i",
-      fw_soft_clipped_start = "i",
-      fw_soft_clipped_end = "i",
-      alignment_start = "i",
-      alignment_end = "i",
-      read_length = "i",
-      base_qual = "i",
-      flag = "i")) |> 
-    as.data.frame() |> 
-    filter(within_alignment == TRUE & ref_position != -1) |> 
-    select(-c(forward_read_position, mod_strand, ref_mod_strand, fw_soft_clipped_start, fw_soft_clipped_end, alignment_start, alignment_end, read_length, base_qual, alignment_end, query_kmer, flag)) |> 
-    group_by(chrom, call_code, canonical_base) |> 
-    select(chrom, call_prob, call_code, canonical_base)
+  chrom_calls = calls_tsv |> filter(chrom == chrom)
+  
+  threshold_tsv = chrom_calls |> 
+    group_by(canonical_base) |> 
+    summarise(default_threshold = quantile(call_prob, 0.1))
 
-  threshold_tsv = list.files(sample_chrom_dir, pattern = "thresholds.tsv", full.names = TRUE) %>% 
-    read_table(show_col_types = FALSE)
-
-  threshold_tsv_nt = threshold_tsv |> distinct(base) |> pull()
+  threshold_tsv_nt = threshold_tsv |> distinct(canonical_base) |> pull(canonical_base)
   
   # find optimum threshold for all canonical nucleotides
   lapply(threshold_tsv_nt, find_optimum_threshold,
-         calls_tsv = calls_tsv,
+         calls_tsv = chrom_calls,
          threshold_tsv = threshold_tsv, 
          target_accuracy = opt$target_accuracy) %>% 
     # combine all nucleotide rows into one output
     bind_rows() %>%
     # add chrom column to the start
-    add_column(chrom = basename(sample_chrom_dir), .before = 1) %>% 
+    add_column(chrom = chrom, .before = 1) %>% 
     # combine all chrom AND ATCG rows into one output
     bind_rows()
 }
 
-run_pipeline_single_chrom <- function(sample_chrom_dir){
+run_pipeline <- function(input_path){
 
-  flog.info(paste0("Analysing ", sample_chrom_dir))
-  optimise_accuracy_df = run_for_single_chrom(sample_chrom_dir)
+    flog.info(paste0("Analysing ", basename(input_path)))
+    calls_tsv = read_table(input_path, show_col_types = FALSE,
+        col_types = list(
+        forward_read_position = "i",
+        ref_position = "i",
+        fw_soft_clipped_start = "i",
+        fw_soft_clipped_end = "i",
+        alignment_start = "i",
+        alignment_end = "i",
+        read_length = "i",
+        base_qual = "i",
+        flag = "i")) |> 
+            as.data.frame() |> 
+            filter(within_alignment == TRUE & ref_position != -1) |> 
+            select(-c(forward_read_position, mod_strand, ref_mod_strand, fw_soft_clipped_start, fw_soft_clipped_end, alignment_start, alignment_end, read_length, base_qual, query_kmer, flag)) |>
+            select(chrom, call_prob, call_code, canonical_base)
+
+    chrom = calls_tsv |> ungroup() |> distinct(chrom) |> pull(chrom)
   
-  if(is.na(opt$output_dir)){
-    output_sample_dir = file.path(sample_chrom_dir)
+    optimise_accuracy_df = lapply(chrom, run_for_single_chrom, calls_tsv = calls_tsv) |> bind_rows()
+
+  if(is.na(opt$output_path)){
+    out_dir = dirname(input_path)
+    out_path = paste0(out_dir,"/","optimise_sensitivity.tsv")
   } else {
-    # the user supplied an output dir
-    output_sample_dir = file.path(opt$output_dir)
-    #output_sample_dir = paste0(output_dir,"/",sample_name,"/")
-    
-    if (!dir.exists(output_sample_dir)) {
-      dir.create(output_sample_dir, recursive = TRUE, showWarnings = FALSE)
+    out_dir = dirname(opt$output_path)
+    out_path = opt$output_path
+    if (!dir.exists(out_dir)){
+      dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
     }
   }
-  
-  write_tsv(optimise_accuracy_df, file = paste0(output_sample_dir,"/optimise_accuracy.tsv"))
-  flog.info(paste0(sample_chrom_dir, " complete"))
+
+  write_tsv(optimise_accuracy_df, file = out_path)
+  flog.info(paste0(basename(input_path), " complete"))
 }
 
-#  DEPRECATED 
-#  run pipeline for all subdirectories (chrom) of a single sample_dir, then output a single dataframe, and save output
-run_pipeline <- function(sample_dir){
-  
-  sample_name = basename(sample_dir)
-  flog.info(paste0("Analysing ", sample_name))
-  
-  chrom_dirs = list.dirs(sample_dir, recursive = FALSE)
-  
-  optimise_accuracy_df = lapply(chrom_dirs, run_for_single_chrom) %>% 
-    # combine all chrom AND ATCG rows into one output
-    bind_rows() %>% 
-    # add sample name column to the start
-    add_column(sample = sample_name, .before = 1)
-  
-  # find/create output dir with subdirectories
-  if(is.na(opt$output_dir)){
-    output_sample_dir = file.path(sample_dir)
-  } else {
-    # the user supplied an output dir
-    output_sample_dir = file.path(opt$output_dir)
-    #output_sample_dir = paste0(output_dir,"/",sample_name,"/")
-    
-    if (!dir.exists(output_sample_dir)) {
-      dir.create(output_sample_dir, recursive = TRUE, showWarnings = FALSE)
-    }
-  }
-  
-  write_tsv(optimise_accuracy_df, file = paste0(output_sample_dir,"/",sample_name,"_",opt$target_accuracy,".tsv"))
-  flog.info(paste0(sample_name, " complete"))
-  
-}
-
-# read input directory and run
-if (file_test("-d", opt$input_dir) == TRUE){
-  # it's a directory, recursively analyse all sample_dir
-  
-  # get a list of all sample_dir
-  sample_chrom_dir = opt$input_dir
-  #sample_dirs = list.dirs(input_dir, recursive = FALSE, full.names = TRUE)
+# read input file and run
+if (file_test("-f", opt$input_path) == TRUE){
   
   flog.info("")
   flog.info("**** Starting sensitivity optimisation ****")
   
-  mclapply(sample_chrom_dir, run_pipeline_single_chrom, mc.cores = opt$cores)
-  
-  #  # run pipeline for each sample
-  #  final_output_df <- mclapply(sample_dir, run_pipeline, mc.cores = opt$cores) %>% 
-  #    bind_rows()
-  #  
-  #  # save a big summary tsv for all samples
-  #  if(is.na(opt$output_dir)){
-  #    output_dir = file.path(input_dir)
-  #  } else {
-  #    # the user supplied an output dir
-  #    output_dir = file.path(opt$output_dir)
-  #  }
-  #  
-  #  write_tsv(final_output_df, file = paste0(output_dir,"probs_threshold_",opt$target_accuracy,".tsv"))
-  
+  run_pipeline(opt$input_path)
+
   flog.info("**** Analysis complete ****")
 }

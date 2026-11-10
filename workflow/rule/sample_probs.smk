@@ -46,93 +46,143 @@ def probs_input_files(wildcards):
             }
 
 # Separate rules for when there are chroms specified or not, because snakemake can only take conditional function in input but not output nor params
-def probs_output_params_chrom(wildcards):
-    return [
+def probs_output_params(wildcards):
+
+    if OPTIMISE_CHROM != "all":
+        return [
             f"--out-dir results/04_sample_probs/{wildcards.sample_name}/{wildcards.chrom}",
             f"--region {wildcards.chrom}",
             f"--prefix {wildcards.sample_name}_{wildcards.chrom}",
             f"--log-filepath results/04_sample_probs/{wildcards.sample_name}/{wildcards.chrom}/{wildcards.sample_name}_{wildcards.chrom}.probs.log"
-        ]
-
-rule sample_probs_chrom:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        bed = f"results/fa2bed/{ref_name}.bed",
-        config_params = config["sample_probs"]["params"],
-        output_params = probs_output_params_chrom
-    output:
-        probs_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_probabilities.tsv"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=4,
-        mem_mb=16000
-    script:
-        "../script/sample_probs.sh"
-
-def probs_output_params_all(wildcards):
+            ]
+    else:
         return [
             f"--out-dir results/04_sample_probs/{wildcards.sample_name}",
             f"--prefix {wildcards.sample_name}",
             f"--log-filepath results/04_sample_probs/{wildcards.sample_name}/{wildcards.sample_name}.probs.log"
         ]
 
-rule sample_probs_all:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        bed = f"results/fa2bed/{ref_name}.bed",
-        config_params = config["sample_probs"]["params"],
-        output_params = probs_output_params_all
-    output:
-        probs_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_probabilities.tsv"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=4,
-        mem_mb=16000
-    script:
-        "../script/sample_probs.sh"
+if OPTIMISE_CHROM != "all":
+    rule sample_probs_chrom:
+        input:
+            unpack(probs_input_files)
+        params:
+            ref = config["reference"],
+            bed = f"results/fa2bed/{ref_name}.bed",
+            config_params = config["sample_probs"]["params"],
+            output_params = probs_output_params
+        output:
+            probs_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_probabilities.tsv"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=4,
+            mem_mb=16000
+        script:
+            "../script/sample_probs.sh"
 
-def extract_calls_sensitivity_params_chrom(wildcards):
-    return [
+    rule sample_probs_all:
+        input:
+            unpack(probs_input_files)
+        params:
+            ref = config["reference"],
+            bed = f"results/fa2bed/{ref_name}.bed",
+            config_params = config["sample_probs"]["params"],
+            output_params = probs_output_params
+        output:
+            probs_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_probabilities.tsv"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=4,
+            mem_mb=16000
+        script:
+            "../script/sample_probs.sh"
+
+def extract_region_param(wildcards):
+
+    if OPTIMISE_CHROM != "all":
+        return [
             f"--region {wildcards.chrom}"
-        ]
+            ]
+    else:
+        return []
 
-rule extract_calls_sensitivity_chrom:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        other_params = "--bgzf --num-reads 10000 --no-filtering --mapped-only",
-        output_params = extract_calls_sensitivity_params_chrom,
-    output:
-        calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=2,
-        mem_mb=16000
-    script:
-        "../script/extract_calls.sh"
+if OPTIMISE_CHROM != "all":
+    rule extract_calls_chrom:
+        input:
+            unpack(probs_input_files)
+        params:
+            ref = config["reference"],
+            region = extract_region_param,
+            other_params = config["optimise_sensitivity"]["extract_calls_params"]
+        output:
+            calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/extract_calls.sh"
+else:
+    rule extract_calls_all:
+        input:
+            unpack(probs_input_files)
+        params:
+            ref = config["reference"],
+            region = extract_region_param,
+            other_params = config["optimise_sensitivity"]["extract_calls_params"]
+        output:
+            calls_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_extract_calls.tsv.gz"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/extract_calls.sh"
 
-rule sensitivity_chrom:
-    input:
-        calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz",
-        out_dir = "results/04_sample_probs/{sample_name}/{chrom}/"
-    params:
-        optimise_accuracy = config["optimise_sensitivity"]["desired_sensitivity"]
-    output:
-        accuracy_tsv = "results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv"
-    conda:
-        "../env/r-optimise.yaml"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=2,
-        mem_mb=16000
-    script:
-        "../script/optimise_sensitivity.sh"
+if OPTIMISE_CHROM != "all":
+    rule sensitivity_chrom:
+        input:
+            calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz"
+        params:
+            optimise_accuracy = config["optimise_sensitivity"]["desired_sensitivity"]
+        output:
+            accuracy_tsv = temp("results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv")
+        conda:
+            "../env/r-optimise.yaml"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/optimise_sensitivity.sh"
+
+    rule concatente_sensitivity:
+        input:
+            accuracy_tsv = expand("results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv", sample_name = OPTIMISE_SAMPLE, chrom = OPTIMISE_CHROM)
+        output:
+            accuracy_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_optimise_accuracy.tsv"
+        shell:
+            "cat {input.accuracy_tsv} > {output.accuracy_tsv}"
+
+else:
+    rule sensitivity_all:
+        input:
+            calls_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_extract_calls.tsv.gz"
+        params:
+            optimise_accuracy = config["optimise_sensitivity"]["desired_sensitivity"]
+        output:
+            accuracy_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_optimise_accuracy.tsv"
+        conda:
+            "../env/r-optimise.yaml"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/optimise_sensitivity.sh"

@@ -1,0 +1,88 @@
+Bootstrap: docker
+From: quay.io/centos/centos:stream9
+
+%labels
+    Author TessaChan
+    Description Dorado and modkit container with CentOS Stream 9, modified from https://github.com/rcgsheffield/hpc-apptainer-images/blob/51161c51d15159b30c0669350658f8d4204dc0c1/software/dorado/1.0.1/dorado-1.0.1.def
+    NOTE Use local machine with root access and apptainer to run "sudo apptainer build [container.sif] [definition.def]"
+
+%post
+    echo ">>> Updating base image and installing dependencies with dnf"
+    dnf -y update 
+    dnf -y install tar gzip ca-certificates openssl
+    dnf -y install wget zip unzip less nano
+    dnf clean all
+
+    export DORADO_VERSION="2.1.2"
+    export BLUE_CRAB_VERSION="v0.6.0"
+    export SLOW5_VERSION="v1.5.0"
+    export MODKIT_VERSION="v0.6.4"
+
+    echo ">>> Downloading dorado"
+    mkdir -p /opt/dorado
+    cd /opt/dorado
+    curl  "https://cdn.oxfordnanoportal.com/software/analysis/dorado-${DORADO_VERSION}-linux-x64.tar.gz" -o dorado-linux-x64.tar.gz
+    tar -xzf dorado-linux-x64.tar.gz --strip-components=1
+    rm dorado-linux-x64.tar.gz
+
+    echo ">>> Creating symlink to Dorado binary"
+    ln -s /opt/dorado/bin/dorado /usr/local/bin/dorado
+
+    echo ">>> Downloading blue-crab"
+    mkdir -p /opt/blue-crab
+    cd /opt/blue-crab
+    wget "https://github.com/Psy-Fer/blue-crab/releases/download/${BLUE_CRAB_VERSION}/blue-crab-${BLUE_CRAB_VERSION}-x86_64-linux-binaries.tar.gz" -O blue-crab-x86_64-linux-binaries.tar.gz
+    tar -xvf blue-crab-x86_64-linux-binaries.tar.gz --strip-components=1
+    rm blue-crab-x86_64-linux-binaries.tar.gz
+
+    echo ">>> Creating symlink to blue-crab binary"
+    ln -s /opt/blue-crab/blue-crab /usr/local/bin/blue-crab
+
+    echo ">>> Downloading slow5tools"
+    mkdir -p /opt/slow5tools
+    cd /opt/slow5tools
+    wget "https://github.com/hasindu2008/slow5tools/releases/download/${SLOW5_VERSION}/slow5tools-${SLOW5_VERSION}-x86_64-linux-binaries.tar.gz" -O slow5tools-x86_64-linux-binaries.tar.gz
+    tar -xvf slow5tools-x86_64-linux-binaries.tar.gz --strip-components=1
+    rm slow5tools-x86_64-linux-binaries.tar.gz
+
+    echo ">>> Creating symlink to slow5tools binary"
+    ln -s /opt/slow5tools/slow5tools /usr/local/bin/slow5tools
+
+    echo ">>> Downloading modkit"
+    mkdir -p /opt/modkit
+    cd /opt/modkit
+    wget "https://github.com/nanoporetech/modkit/releases/download/${MODKIT_VERSION}/modkit_${MODKIT_VERSION}_u16_x86_64.tar.gz" -O modkit_u16_x86_64.tar.gz
+    tar -xvf modkit_u16_x86_64.tar.gz --strip-components=1
+    rm modkit_u16_x86_64.tar.gz
+
+    echo ">>> Creating symlink to modkit binary"
+    ln -s /opt/modkit/modkit /usr/local/bin/modkit
+
+    echo ">>> Downloading miniconda"
+    cd ~
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3
+    source /opt/miniconda3/bin/activate
+    conda init --all
+    source ~/.bashrc
+    rm ~/Miniconda3-latest-Linux-x86_64.sh
+
+    echo ">>> Creating symlink to conda binary"
+    ln -s /opt/miniconda3/bin/conda /usr/local/bin/conda
+
+%environment
+    export PATH=/opt/dorado/bin/:$PATH
+    export PATH=/opt/blue-crab/:$PATH
+    export PATH=/opt/slow5tools/:$PATH
+    export PATH=/opt/modkit/:$PATH
+    export PATH=/opt/miniconda3/bin/:$PATH
+    export CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
+
+%test
+    echo ">>> Testing package installation"
+    
+    blue-crab --version
+    dorado --version
+    slow5tools --version
+    modkit --version
+    conda --version

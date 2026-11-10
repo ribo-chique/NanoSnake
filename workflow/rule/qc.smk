@@ -29,7 +29,7 @@ rule nanocount:
 # Find input files for the main QC step. common.smk defined chrom to be "all" + chroms in config.
 def QC_input_files(wildcards):
     file_name = f"results/02_align/{wildcards.sample_name}/{wildcards.sample_name}"
-    if wildcards.chrom == "all":
+    if QC_CHROM == "all":
         return {
             "aln_sorted_bam": f"{file_name}.aln.sorted.bam",
             "aln_fastq": f"{file_name}.aln.fastq.gz"

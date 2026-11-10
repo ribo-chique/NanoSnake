@@ -6,6 +6,7 @@ include: "rule/basecall.smk"
 include: "rule/align.smk"
 include: "rule/qc.smk"
 include: "rule/sample_probs.smk"
+include: "rule/pileup.smk"
 
 print(get_final_output())
 rule all:

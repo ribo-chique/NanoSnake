@@ -1,143 +1,100 @@
-def parse_thresholds(wildcards):
-    if config["pileup"]["override_threshold"] == "default":
-        return ("")
-    elif config["pileup"]["override_threshold"] != []:
+def override_threshold_param(wildcards):
+    override_threshold = config["pileup"]["override_threshold"]
+    # if field is non-empty and it's not "default", use entire field
+    if override_threshold and override_threshold != "default":
+        per_base = override_threshold.split()
+        return " ".join(f"--filter-threshold {base}" for base in per_base)
+    # if field is empty or if it's "default", return nothing
+    elif override_threshold == "default" or not override_threshold:
+        return ""
 
-        return (f"--filter-threshold config["pileup"]["override_threshold"]")
-    elif config["pileup"]["override_threshold"] == []:
-        if config["pileup"]["use_chrom_specific_threshold"] == False
-        elif config["pileup"]["use_chrom_specific_threshold"] == True
+def mod_threshold_param(wildcards):
+    mod_threshold = config["pileup"]["mod_threshold"]
+    # if field is non-empty, use entire field
+    if mod_threshold:
+        per_mod = mod_threshold.split()
+        return " ".join(f"--mod-threshold {mod}" for mod in per_mod)
+    # if field is empty, return nothing
+    return ""
 
-def parse_thresholds_inputs(wildcards):
-    accuracy_tsv = "results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv"
+def pileup_region_params(wildcards):
+    # if there are chrom specified, output region param
+    if QC_CHROM != "all":
+        return f"--region {wildcards.chrom}"
+    # if field is empty, return nothing
+    return ""
 
-rule parse_thresholds:
-    input:
-
-
-# Get name of reference file without extension
-ref_name = os.path.splitext(os.path.basename(config["reference"]))[0]
-
-# Convert reference fa to bed, for mod sampling 
-rule fa2bed_init:
-    input:
-        ref = config["reference"]
-    output:
-        temp_bed = temp(f"results/fa2bed/{ref_name}_{{nt}}.bed2"),
-        modkit_out = temp(f"results/fa2bed/{ref_name}_{{nt}}.bed")
-    script:
-        "../script/fa2bed_init.sh"
-
-rule fa2bed_end:
-    input:
-        modkit_out = expand(f"results/fa2bed/{ref_name}_{{nt}}.bed", nt = ["A", "C", "G", "T"])
-    output:
-        bed = f"results/fa2bed/{ref_name}.bed"
-    script:
-        "../script/fa2bed_end.sh"
-
-# Find input files for the sample-probs step. If ivt_merge was ran then add merged bam to input
-def probs_input_files(wildcards):
+def pileup_input_files(wildcards):
     sample_bam = f"results/02_align/{wildcards.sample_name}/{wildcards.sample_name}.aln.sorted.bam"
-    merge_bam = "results/02_align/IVT_merge/IVT_merge.aln.sorted.bam"
+    accuracy_tsv = ["results/04_sample_probs/{optimise_sample}/{optimise_sample}_optimise_accuracy.tsv".format(optimise_sample=optimise_sample) for optimise_sample in OPTIMISE_SAMPLE]
 
-    if os.path.exists(merge_bam):
+    # if there is no override param, then must provide threshold_tsv
+    if not config["pileup"]["override_threshold"]:
         return {
-            "aln_sorted_bam": [sample_bam, merge_bam]
-            }
+            "aln_sorted_bam" : sample_bam,
+            "accuracy_tsv": accuracy_tsv
+        }
+    
+    # if there is override param, then don't need threshold_tsv
     else:
         return {
-            "aln_sorted_bam": sample_bam
-            }
+            "aln_sorted_bam" : sample_bam,
+            "accuracy_tsv": ""
+        }
 
-# Separate rules for when there are chroms specified or not, because snakemake can only take conditional function in input but not output nor params
-def probs_output_params_chrom(wildcards):
-    return [
-            f"--out-dir results/04_sample_probs/{wildcards.sample_name}/{wildcards.chrom}",
-            f"--region {wildcards.chrom}",
-            f"--prefix {wildcards.sample_name}_{wildcards.chrom}",
-            f"--log-filepath results/04_sample_probs/{wildcards.sample_name}/{wildcards.chrom}/{wildcards.sample_name}_{wildcards.chrom}.probs.log"
-        ]
+if QC_CHROM != "all":
+    rule pileup_chrom:
+        input:
+            unpack(pileup_input_files)
+        output:
+            pileup_bed = temp("results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed")
+        params:
+            ref = config["reference"],
+            region = pileup_region_params,
+            other_params = config["pileup"]["pileup_params"],
+            bed = f"results/fa2bed/{ref_name}.bed",
+            include_bed = config["pileup"]["include_bed"],
+            chrom_specific_bool = config["pileup"]["use_chrom_specific_threshold"],
+            override_threshold = override_threshold_param,
+            mod_threshold = mod_threshold_param,
+            log_path = "results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.log"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/pileup.sh"
 
-rule sample_probs_chrom:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        bed = f"results/fa2bed/{ref_name}.bed",
-        config_params = config["sample_probs"]["params"],
-        output_params = probs_output_params_chrom
-    output:
-        probs_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_probabilities.tsv"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=4,
-        mem_mb=16000
-    script:
-        "../script/sample_probs.sh"
+    rule concatenate_pileup:
+        input:
+            pileup_bed = expand("results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed", sample_name = SAMPLE, chrom = QC_CHROM)
+        output:
+            pileup_bed = "results/05_pileup/{sample_name}/{sample_name}.pileup.bed"
+        shell:
+            "cat {input.pileup_bed} > {output.pileup_bed}"
 
-def probs_output_params_all(wildcards):
-        return [
-            f"--out-dir results/04_sample_probs/{wildcards.sample_name}",
-            f"--prefix {wildcards.sample_name}",
-            f"--log-filepath results/04_sample_probs/{wildcards.sample_name}/{wildcards.sample_name}.probs.log"
-        ]
+else:
+    rule pileup_all:
+        input:
+            unpack(pileup_input_files)
+        output:
+            pileup_bed = "results/05_pileup/{sample_name}/{sample_name}.pileup.bed"
+        params:
+            ref = config["reference"],
+            region = pileup_region_params,
+            other_params = config["pileup"]["pileup_params"],
+            bed = f"results/fa2bed/{ref_name}.bed",
+            include_bed = config["pileup"]["include_bed"],
+            chrom_specific_bool = config["pileup"]["use_chrom_specific_threshold"],
+            override_threshold = override_threshold_param,
+            mod_threshold = mod_threshold_param,
+            log_path = "results/05_pileup/{sample_name}/{sample_name}.pileup.log"
+        resources:
+            #24h
+            runtime=1440,
+            cpus_per_task=2,
+            mem_mb=16000
+        script:
+            "../script/pileup.sh"
 
-rule sample_probs_all:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        bed = f"results/fa2bed/{ref_name}.bed",
-        config_params = config["sample_probs"]["params"],
-        output_params = probs_output_params_all
-    output:
-        probs_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_probabilities.tsv"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=4,
-        mem_mb=16000
-    script:
-        "../script/sample_probs.sh"
-
-def extract_calls_sensitivity_params_chrom(wildcards):
-    return [
-            f"--region {wildcards.chrom}"
-        ]
-
-rule extract_calls_sensitivity_chrom:
-    input:
-        unpack(probs_input_files)
-    params:
-        ref = config["reference"],
-        other_params = "--bgzf --num-reads 10000 --no-filtering --mapped-only",
-        output_params = extract_calls_sensitivity_params_chrom,
-    output:
-        calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=2,
-        mem_mb=16000
-    script:
-        "../script/extract_calls.sh"
-
-rule sensitivity_chrom:
-    input:
-        calls_tsv = "results/04_sample_probs/{sample_name}/{chrom}/{sample_name}_{chrom}_extract_calls.tsv.gz",
-        out_dir = "results/04_sample_probs/{sample_name}/{chrom}/"
-    params:
-        optimise_accuracy = config["optimise_sensitivity"]["desired_sensitivity"]
-    output:
-        accuracy_tsv = "results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv"
-    conda:
-        "../env/r-optimise.yaml"
-    resources:
-        #24h
-        runtime=1440,
-        cpus_per_task=2,
-        mem_mb=16000
-    script:
-        "../script/optimise_sensitivity.sh"

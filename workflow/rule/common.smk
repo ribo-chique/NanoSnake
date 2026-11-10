@@ -73,21 +73,19 @@ def get_final_output():
             )
         )
     
-    if OPTIMISE_CHROM == "all":
-        final_output.extend(
-            expand(
-                "results/04_sample_probs/{sample}/optimise_accuracy.tsv",
-                sample = OPTIMISE_SAMPLE
-                )
-        )
-    else:
-        final_output.extend(
-            expand(
-            "results/04_sample_probs/{sample}/{chrom}/optimise_accuracy.tsv",
-            sample = OPTIMISE_SAMPLE,
-            chrom = OPTIMISE_CHROM
+    final_output.extend(
+        expand(
+            "results/04_sample_probs/{sample}/{sample}_optimise_accuracy.tsv",
+            sample = OPTIMISE_SAMPLE
             )
         )
+
+    final_output.extend(
+        expand(
+            "results/05_pileup/{sample}/{sample}.pileup.bed",
+            sample = SAMPLE
+        )
+    )
     return final_output
 
 print("samples:", SAMPLE)
