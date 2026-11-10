@@ -47,7 +47,7 @@ if QC_CHROM != "all":
         input:
             unpack(pileup_input_files)
         output:
-            pileup_bed = temp("results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed")
+            pileup_bed = "results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed"
         params:
             ref = config["reference"],
             region = pileup_region_params,
@@ -68,7 +68,7 @@ if QC_CHROM != "all":
 
     rule concatenate_pileup:
         input:
-            pileup_bed = expand("results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed", sample_name = SAMPLE, chrom = QC_CHROM)
+            pileup_bed = expand("results/05_pileup/{sample_name}/{chrom}/{sample_name}_{chrom}.pileup.bed", chrom = QC_CHROM, allow_missing=True)
         output:
             pileup_bed = "results/05_pileup/{sample_name}/{sample_name}.pileup.bed"
         shell:

@@ -39,9 +39,9 @@ fi
 include_bed_bool=${snakemake_params[include_bed]}
 # if pileup filters for bed file
 bed_param=""
-if [[ include_bed_bool == "True" ]]; then
+if [[ $include_bed_bool == "True" ]]; then
 
-    # then use --include-bed paramter
+    # then use --include-bed parameter
     bed_param="--include-bed ${snakemake_params[bed]}"
 fi
 

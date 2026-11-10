@@ -163,7 +163,7 @@ if OPTIMISE_CHROM != "all":
 
     rule concatente_sensitivity:
         input:
-            accuracy_tsv = expand("results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv", sample_name = OPTIMISE_SAMPLE, chrom = OPTIMISE_CHROM)
+            accuracy_tsv = expand("results/04_sample_probs/{sample_name}/{chrom}/optimise_accuracy.tsv", chrom = OPTIMISE_CHROM, allow_missing = True)
         output:
             accuracy_tsv = "results/04_sample_probs/{sample_name}/{sample_name}_optimise_accuracy.tsv"
         shell:
